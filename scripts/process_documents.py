@@ -8,9 +8,7 @@ from nlp_news.models import Document, NGram, DocumentNGram
 
 logger = logging.getLogger("ingest")
 
-def generate_ngrams(text_val: str, n: int, nlp):
-    logger.debug(f"Generating {n}-grams for text of length {len(text_val)}")
-    doc = nlp(text_val.lower())
+def generate_ngrams(doc, n: int):
     # Filter out punctuation and whitespace
     tokens = [token.text for token in doc if not token.is_punct and not token.is_space]
     
@@ -45,10 +43,15 @@ def main():
         documents = session.exec(select(Document)).all()
         logger.info(f"Found {len(documents)} documents in database to process")
         
-        for db_doc in documents:
+        ngram_cache = {}  # text -> id mapping
+        
+        # Generator for nlp.pipe
+        texts = (doc.content.lower() for doc in documents)
+        
+        for db_doc, spacy_doc in zip(documents, nlp.pipe(texts, batch_size=50)):
             logger.info(f"Processing document ID {db_doc.id}: {db_doc.path[:50]}...")
             
-            ngrams_list = generate_ngrams(db_doc.content, config.n_gram_size, nlp)
+            ngrams_list = generate_ngrams(spacy_doc, config.n_gram_size)
             
             ngram_counts = {}
             for text_val in ngrams_list:
@@ -56,19 +59,24 @@ def main():
             
             logger.debug(f"Found {len(ngram_counts)} unique {config.n_gram_size}-grams")
             
-            for text_val, count in ngram_counts.items():
-                # Get or create NGram
-                db_ngram = session.exec(select(NGram).where(NGram.text == text_val)).first()
-                if not db_ngram:
-                    db_ngram = NGram(text=text_val, n=config.n_gram_size)
-                    session.add(db_ngram)
-                    session.commit() # Commit here to ensure NGram ID is available and handle unique constraint
-                    session.refresh(db_ngram)
-                
-                link = DocumentNGram(document_id=db_doc.id, ngram_id=db_ngram.id, count=count)
-                session.add(link)
+            new_ngrams = []
+            for text_val in ngram_counts.keys():
+                if text_val not in ngram_cache:
+                    new_ngrams.append(NGram(text=text_val, n=config.n_gram_size))
             
+            if new_ngrams:
+                session.add_all(new_ngrams)
+                session.commit()
+                for ngram in new_ngrams:
+                    session.refresh(ngram)
+                    ngram_cache[ngram.text] = ngram.id
+            
+            links = []
+            for text_val, count in ngram_counts.items():
+                links.append(DocumentNGram(document_id=db_doc.id, ngram_id=ngram_cache[text_val], count=count))
+            session.add_all(links)
             session.commit()
+            
             logger.info(f"Successfully processed document {db_doc.id}")
 
     logger.info("NLP processing complete.")

@@ -1,6 +1,7 @@
 import os
 import logging
 import json
+import argparse
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from bs4 import BeautifulSoup
@@ -96,74 +97,81 @@ def extract_from_html(content: str):
     return []
 
 def main():
+    parser = argparse.ArgumentParser(description="Import data from specific sample directories")
+    parser.add_argument("--start-sample-id", type=int, default=0, help="Starting sample ID (inclusive)")
+    parser.add_argument("--end-sample-id", type=int, default=10, help="Ending sample ID (exclusive)")
+    args = parser.parse_args()
+
     setup_logging()
     config = load_config()
     engine = get_engine(config.db_path)
     
     base_path = "data/samples"
-    logger.info(f"Scanning {base_path} for XML and HTML files...")
+    logger.info(f"Scanning samples from {args.start_sample_id} to {args.end_sample_id}...")
     
     imported_count = 0
     processed_files_count = 0
-    MAX_FILES = 5
     
     with Session(engine) as session:
-        for root, dirs, files in os.walk(base_path):
-            if processed_files_count >= MAX_FILES:
-                break
-                
-            # Load attributes for the current directory
-            attrs = load_attributes(root)
+        for sample_id in range(args.start_sample_id, args.end_sample_id):
+            level_1 = sample_id // 65536
+            level_2 = (sample_id // 256) % 256
+            level_3 = sample_id % 256
+            sample_dir = os.path.join(base_path, f"{level_1:03d}", f"{level_2:03d}", f"{level_3:03d}")
             
-            for filename in files:
-                if processed_files_count >= MAX_FILES:
-                    break
-                    
-                if not (filename.endswith(".xml") or filename.endswith(".html") or filename.endswith(".htm")):
-                    continue
+            if not os.path.exists(sample_dir):
+                continue
                 
-                processed_files_count += 1
-                file_path = os.path.join(root, filename)
-                try:
-                    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                        content = f.read()
+            for root, dirs, files in os.walk(sample_dir):
+                # Load attributes for the current directory
+                attrs = load_attributes(root)
+                
+                for filename in files:
+                    if not (filename.endswith(".xml") or filename.endswith(".html") or filename.endswith(".htm")):
+                        continue
                     
-                    extracted_data = []
-                    if filename.endswith(".xml"):
-                        extracted_data = extract_from_xml(content)
-                    else:
-                        extracted_data = extract_from_html(content)
-                    
-                    for item in extracted_data:
-                        text = item["text"]
-                        snippet_id = abs(hash(text)) % 1000000
-                        pseudo_path = f"{file_path}#{snippet_id}"
+                    processed_files_count += 1
+                    file_path = os.path.join(root, filename)
+                    try:
+                        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                            content = f.read()
                         
-                        existing = session.exec(select(Document).where(Document.path == pseudo_path)).first()
-                        if not existing:
-                            # Prefer attributes.json over embedded metadata
-                            final_url = (attrs["url"] if attrs and attrs["url"] else item["url"])
-                            final_ts = (attrs["timestamp"] if attrs and attrs["timestamp"] else item["timestamp"])
-                            
-                            if not final_ts:
-                                mtime = os.path.getmtime(file_path)
-                                final_ts = datetime.fromtimestamp(mtime, tz=timezone.utc)
-                            
-                            doc = Document(
-                                path=pseudo_path, 
-                                content=text, 
-                                source_url=final_url, 
-                                timestamp=final_ts
-                            )
-                            session.add(doc)
-                            imported_count += 1
-                    
-                    if len(extracted_data) > 0:
-                        logger.info(f"Imported {len(extracted_data)} snippets from {file_path}")
-                        session.commit()
+                        extracted_data = []
+                        if filename.endswith(".xml"):
+                            extracted_data = extract_from_xml(content)
+                        else:
+                            extracted_data = extract_from_html(content)
                         
-                except Exception as e:
-                    logger.error(f"Failed to process {file_path}: {e}")
+                        for item in extracted_data:
+                            text = item["text"]
+                            snippet_id = abs(hash(text)) % 1000000
+                            pseudo_path = f"{file_path}#{snippet_id}"
+                            
+                            existing = session.exec(select(Document).where(Document.path == pseudo_path)).first()
+                            if not existing:
+                                # Prefer attributes.json over embedded metadata
+                                final_url = (attrs["url"] if attrs and attrs["url"] else item["url"])
+                                final_ts = (attrs["timestamp"] if attrs and attrs["timestamp"] else item["timestamp"])
+                                
+                                if not final_ts:
+                                    mtime = os.path.getmtime(file_path)
+                                    final_ts = datetime.fromtimestamp(mtime, tz=timezone.utc)
+                                
+                                doc = Document(
+                                    path=pseudo_path, 
+                                    content=text, 
+                                    source_url=final_url, 
+                                    timestamp=final_ts
+                                )
+                                session.add(doc)
+                                imported_count += 1
+                        
+                        if len(extracted_data) > 0:
+                            logger.info(f"Imported {len(extracted_data)} snippets from {file_path}")
+                            session.commit()
+                            
+                    except Exception as e:
+                        logger.error(f"Failed to process {file_path}: {e}")
 
     logger.info(f"Import complete. Total new documents added: {imported_count}")
 

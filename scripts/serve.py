@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from sqlmodel import Session, select
@@ -8,14 +9,15 @@ import logging
 
 logger = logging.getLogger("serve")
 
-app = FastAPI()
-config = load_config()
-engine = get_engine(config.db_path)
-
-@app.on_event("startup")
-def on_startup():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     setup_logging()
     logger.info("Starting web server...")
+    yield
+
+app = FastAPI(lifespan=lifespan)
+config = load_config()
+engine = get_engine(config.db_path)
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
