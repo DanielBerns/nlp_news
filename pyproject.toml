@@ -1,0 +1,26 @@
+[project]
+name = "nlp-news"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "DanielBerns", email = "daniel.w.berns@gmail.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "beautifulsoup4>=4.14.3",
+    "fastapi>=0.136.1",
+    "lxml>=6.1.0",
+    "mlxtend>=0.24.0",
+    "pyyaml>=6.0.3",
+    "spacy>=3.8.13",
+    "sqlmodel>=0.0.38",
+    "uvicorn>=0.46.0",
+]
+
+[project.scripts]
+nlp-news = "nlp_news:main"
+
+[build-system]
+requires = ["uv_build>=0.10.9,<0.11.0"]
+build-backend = "uv_build"

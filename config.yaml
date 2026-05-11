@@ -1,0 +1,6 @@
+input_dir: "data/es"
+db_path: "nlp_news_es.db"
+language: "es"
+n_gram_size: 2
+min_support: 0.2
+min_confidence: 0.1
