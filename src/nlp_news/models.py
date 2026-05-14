@@ -9,6 +9,7 @@ class Document(SQLModel, table=True):
     content: str
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     source_url: Optional[str] = Field(default=None)
+    cluster_id: Optional[int] = Field(default=None) # field for DBSCAN clusters
 
 class NGram(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)

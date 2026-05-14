@@ -3,4 +3,6 @@ db_path: "nlp_news_es.db"
 language: "es"
 n_gram_size: 2
 min_support: 0.03
-min_confidence: 0.
+min_confidence: 0.1
+dbscan_eps: 0.3        # The maximum distance between two samples for one to be considered as in the neighborhood of the other.
+dbscan_min_samples: 3  # The number of samples (or total weight) in a neighborhood for a point to be considered as a core point.
