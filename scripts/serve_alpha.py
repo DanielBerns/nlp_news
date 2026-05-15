@@ -36,47 +36,6 @@ def generate_dendrogram(df, output_path="dendrogram.png"):
     plt.close()
     logger.info(f"Dendrogram saved to {output_path}")
 
-import json
-from scipy.cluster import hierarchy
-
-def build_tree_json(node, leaf_names):
-    """Recursively builds a nested JSON dictionary from a SciPy tree node."""
-    if node.is_leaf():
-        # It's a document. We store the actual Document ID.
-        return {"name": f"Doc {leaf_names[node.id]}", "doc_id": leaf_names[node.id]}
-    else:
-        # It's a cluster node merging two sub-branches
-        return {
-            "name": f"Cluster",
-            "children": [
-                build_tree_json(node.get_left(), leaf_names),
-                build_tree_json(node.get_right(), leaf_names)
-            ]
-        }
-
-def generate_interactive_dendrogram(df, doc_ids, output_path="dendrogram.json"):
-    """Generates the JSON structure required for a frontend interactive tree."""
-    from scipy.spatial.distance import pdist
-
-    logger.info("Calculating linkage matrix for interactive tree...")
-    dist_matrix = pdist(df, metric='cosine')
-    Z = hierarchy.linkage(dist_matrix, method='average')
-
-    # Convert linkage matrix to a tree object
-    root_node = hierarchy.to_tree(Z, rd=False)
-
-    # Build the nested JSON using the actual document IDs as leaf names
-    tree_data = build_tree_json(root_node, doc_ids)
-
-    with open(output_path, "w") as f:
-        json.dump(tree_data, f)
-
-    logger.info(f"Interactive tree data saved to {output_path}")
-
-
-
-
-
 def main():
     parser = argparse.ArgumentParser(description="Cluster documents based on itemsets.")
     parser.add_argument(
@@ -133,8 +92,6 @@ def main():
             cluster_labels = model.fit_predict(df)
             # Generate the visualization
             generate_dendrogram(df, "dendrogram.png")
-            # Generate the JSON for the web server
-            generate_interactive_dendrogram(df, doc_ids, "dendrogram.json")
 
         elif args.method == "isolation_forest":
             contamination = getattr(config, 'isolation_contamination', 0.05)

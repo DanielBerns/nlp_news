@@ -101,11 +101,11 @@ def main():
 
         # Move legend outside the plot
         plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', title='Clusters')
-        plt.tight_layout()
+        # plt.tight_layout()
 
         # 7. Save the Output
         output_file = 'clusters_visualization.png'
-        plt.savefig(output_file, dpi=300)
+        plt.savefig(output_file, dpi=300, bbox_inches='tight')
         logger.info(f"Visualization saved successfully to {output_file}")
 
 if __name__ == "__main__":

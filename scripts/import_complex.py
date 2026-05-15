@@ -146,21 +146,26 @@ def main():
                             text = item["text"]
                             snippet_id = abs(hash(text)) % 1000000
                             pseudo_path = f"{file_path}#{snippet_id}"
-                            
-                            existing = session.exec(select(Document).where(Document.path == pseudo_path)).first()
-                            if not existing:
+
+                            # Check if the exact text content already exists in the database
+                            existing_content = session.exec(select(Document).where(Document.content == text)).first()
+
+                            # Also check the path just in case of a hash collision in a previous run
+                            existing_path = session.exec(select(Document).where(Document.path == pseudo_path)).first()
+
+                            if not existing_content and not existing_path:
                                 # Prefer attributes.json over embedded metadata
                                 final_url = (attrs["url"] if attrs and attrs["url"] else item["url"])
                                 final_ts = (attrs["timestamp"] if attrs and attrs["timestamp"] else item["timestamp"])
-                                
+
                                 if not final_ts:
                                     mtime = os.path.getmtime(file_path)
                                     final_ts = datetime.fromtimestamp(mtime, tz=timezone.utc)
-                                
+
                                 doc = Document(
-                                    path=pseudo_path, 
-                                    content=text, 
-                                    source_url=final_url, 
+                                    path=pseudo_path,
+                                    content=text,
+                                    source_url=final_url,
                                     timestamp=final_ts
                                 )
                                 session.add(doc)
